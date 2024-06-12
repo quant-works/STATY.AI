@@ -5,7 +5,7 @@
 **STATY.AI offers two options to get started:**
 
 * **Source Code:** This guide provides detailed instructions for installing and running STATY.AI from the source code. 
-* **Portable Version:** Information on obtaining a user-friendly, ready-to-run portable version can be found [here](https://github.com/lilulamili/STATY_AI/wiki/STATY.AI).
+* **Portable Version:** Information on obtaining a user-friendly, ready-to-run portable version can be found [here](https://github.com/quant-works/STATY.AI/wiki/STATY.AI).
 
 > [!TIP]
 > * 8GB RAM minimum is recommended. Response speed scales with CPU/GPU power.
@@ -31,10 +31,8 @@
    Install Ollama from: https://ollama.com/
 
 **4. Download 'STATY.AI'**   
-  Download 'STATY.AI' as a ZIP file from https://github.com/lilulamili/STATY_AI to a folder on your PC. Click the zip file and extract it.  
-  > [!TIP]
-> To download STATY.AI, press the green button `<> Code` and select `Download ZIP`. 
-      
+  To download STATY.AI, press the green button `<> Code` above and select `Download ZIP`. 
+       
 **5. Get 'STATY.AI' ready**  
    Open VSCode. Go to the `File` menu, select `Open Folder`, and then navigate to the project folder you just created (the one where the file are).  
    `„Do you trust the Author of this Folder” – click “yes”`
