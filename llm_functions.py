@@ -313,6 +313,7 @@ def ram_based_models(total_ram):
     "gemma:2b": "A 2-billion parameter lightweight text model from Google DeepMind, ideal for various tasks where a smaller, efficient model is preferred (https://ollama.com/library/gemma).",
     "gemma:7b": "A member of the Gemma family from Google DeepMind, featuring 7 billion parameters for more complex text processing tasks (https://ollama.com/library/gemma).",
     "llama3.1:8b": "A member of the Llama 3 family of models developed by Meta Inc (https://ollama.com/library/llama3.1).",
+    "llama3.2-vision": "Image reasoning modell, a member of the Llama 3 family  developed by Meta Inc (https://ollama.com/library/llama3.2-vision).",
     "llama3.3:70b": "A member of the Llama 3 family of models developed by Meta Inc (https://ollama.com/library/llama3.3).",       
     "deepseek-r1:8b": "DeepSeek’s first-generation reasoning models, achieving performance comparable to OpenAI-o1 across math, code, and reasoning tasks. (https://ollama.com/library/deepseek-r1).",
     "deepseek-r1:14b": "DeepSeek’s first-generation reasoning models, achieving performance comparable to OpenAI-o1 across math, code, and reasoning tasks. (https://ollama.com/library/deepseek-r1).",
@@ -342,7 +343,7 @@ def ram_based_models(total_ram):
     if total_ram >= 7.9:
         recommended_models.extend(["llama3.1:8b","gemma:7b","mistral:latest","deepseek-r1:8b","sauerkrautlm-7b-hero","codellama:latest"])#, "wizard-math","llama-pro:latest"]  
     if total_ram >= 15.9:
-        recommended_models.extend(["deepseek-r1:14b","llama2:13b", "codellama:13b"])  
+        recommended_models.extend(["deepseek-r1:14b","llama3.2-vision","llama2:13b", "codellama:13b"])  
     if total_ram >= 60:
         recommended_models.extend(["llama3.3:70b","llama3.1:70b","deepseek-r1:70b","codellama:34b", "codellama:70b" ])  # Larger models for 64GB+ RAM
 
