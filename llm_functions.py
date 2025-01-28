@@ -9,6 +9,9 @@ import platform
 import psutil
 import shutil
 import time
+import base64
+import io
+from PIL import Image
 import streamlit as st
 from tqdm import tqdm
 from langchain.prompts import PromptTemplate
@@ -81,31 +84,27 @@ def select_model_sidebar():
 
     # Read avaiable models from the Ollama default folder
     available_ollama_models=ollama_check()  
-    
     if available_ollama_models is None:
         model_names=[]    
     else:
         model_names = [model["name"] for model in available_ollama_models]
       
-   
+    
+    
     # User selection of the LLM
     llm_name = st.sidebar.selectbox("Choose model", [""] + model_names)
     if llm_name == "" and menu_option =="Chat":    
-        if model_names !=[]:
-            st.info("Select LLM model from the 'Choose model' menu on the sidebar.")
-        
+        if model_names !=[]: st.info("Select LLM model from the 'Choose model' menu on the sidebar.")
         chat_info_expander=st.expander("More Info on Model Selection",expanded=False)
         
         with chat_info_expander:
                 st.markdown("")
                 st.markdown(
-                "\n\n For chats in English, consider employing 'gemma' built by Google DeepMind (https://ollama.com/library/gemma), 'llama3' developed by Meta Inc (https://ollama.com/library/llama3) or 'mistral' built by a french comapny Mistral AI (https://ollama.com/library/mistral)."  
-                "\n\n For chats in German, consider employing 'discolm-mfto-german' (https://huggingface.co/Blizado/discolm-mfto-7b-german-v0.1) or 'SauerkrautLM' (https://huggingface.co/VAGOsolutions/SauerkrautLM-7b-HerO)."  
-                "\n\n You can download and delete models from the 'Manage LLMs' menu.") 
+                "\n\n For chats in English, consider employing models from the 'gemma' family (https://ollama.com/library/gemma) or 'mistral' (https://ollama.com/library/mistral)."  
+                "\n\n For chats in German, consider employing 'llama3.1' (https://ollama.com/library/llama3.1) or 'SauerkrautLM' (https://huggingface.co/VAGOsolutions/SauerkrautLM-7b-HerO)."  
+                "\n\n You can download and delete models from the 'Home' menu.") 
     elif llm_name == "" and menu_option =="Chat with my data":    
-        if model_names !=[]:
-            st.info("Select LLM model from the 'Choose model' menu on the sidebar." )
-        
+        if model_names !=[]:st.info("Select LLM model from the 'Choose model' menu on the sidebar." )
         chat_info_expander=st.expander("More Info on Chatting with Your Data",expanded=False)
         with chat_info_expander:
                 st.markdown("")
@@ -132,13 +131,13 @@ def select_model_sidebar():
                 st.markdown("")
                 st.write("**Model Selection**")
                 st.markdown( """
-                For chats in English, consider employing 'gemma' built by Google DeepMind (https://ollama.com/library/gemma), 'llama3' developed by Meta Inc (https://ollama.com/library/llama3) or 'mistral' built by a french comapny Mistral AI (https://ollama.com/library/mistral).  
+                For chats in English, consider employing models from the 'gemma' family (https://ollama.com/library/gemma) or 'mistral' (https://ollama.com/library/mistral).  
                 
-                For chats in German, consider employing 'discolm-mfto-german' (https://huggingface.co/Blizado/discolm-mfto-7b-german-v0.1) or 'SauerkrautLM' (https://huggingface.co/VAGOsolutions/SauerkrautLM-7b-HerO).  
+                For chats in German, consider employing 'llama3.1' (https://ollama.com/library/llama3.1) or 'SauerkrautLM' (https://huggingface.co/VAGOsolutions/SauerkrautLM-7b-HerO)."    
                 
-                You can download and delete models from the 'Manage LLms' menu.
+                You can download and delete models from the 'Home' menu.
                 
-                
+                Please choose a model first. You can find the option in the sidebar labeled 'Choose model'
                 """)  
     
     return menu_option, available_ollama_models,llm_name
@@ -204,9 +203,10 @@ def ollama_check_home():
                 Oops! It seems there's an issue with Ollama.  
                 Please ensure that Ollama is installed and running. 
                 You can download Ollama from https://ollama.com.  
-                After starting Ollama, don't forget to reload this page.                  
+                After starting Ollama, don't forget to reload this page.  
+                If you need assistance, consider checking out the 'STATY.AI let's get started' video.
                  """)
-    
+  
      
 #----------------------------------------------------------------------------------------------
 # Check if Ollama is installed and running
@@ -220,9 +220,8 @@ def ollama_check():
         st.error("Please make sure you have Ollama installed and running!  You can download Ollama from https://ollama.com.  \n Please reload this page after starting Ollama.   ")
         st.stop()
 
-    
-    if available_ollama_models==[]:
-        st.error("**You don't have any models yet.** Install some suitable for your RAM from the menu 'Manage LLMs/Download LLMs'. \n\n Here's why **'gemma:2b'** is a good choice:**'gemma:2b'** is a relatively lightweight model, making it ideal for getting started. This translates to faster download times, lower resource consumption, and potentially smoother operation, especially if you have limited computational power.")
+    if available_ollama_models is None:
+        st.error("**You don't have any models yet.** Install some suitable for your RAM.")
                
     return available_ollama_models  
 
@@ -313,7 +312,11 @@ def ram_based_models(total_ram):
     "sauerkrautlm-7b-hero": "German text generation model with 7 billion parameters, trained on a massive dataset of German text (https://huggingface.co/VAGOsolutions/SauerkrautLM-7b-HerO).",
     "gemma:2b": "A 2-billion parameter lightweight text model from Google DeepMind, ideal for various tasks where a smaller, efficient model is preferred (https://ollama.com/library/gemma).",
     "gemma:7b": "A member of the Gemma family from Google DeepMind, featuring 7 billion parameters for more complex text processing tasks (https://ollama.com/library/gemma).",
-    "llama3:8b": "A member of the Llama 3 family of models developed by Meta Inc (https://ollama.com/library/llama3).",
+    "llama3.1:8b": "A member of the Llama 3 family of models developed by Meta Inc (https://ollama.com/library/llama3.1).",
+    "llama3.3:70b": "A member of the Llama 3 family of models developed by Meta Inc (https://ollama.com/library/llama3.3).",       
+    "deepseek-r1:8b": "DeepSeek’s first-generation reasoning models, achieving performance comparable to OpenAI-o1 across math, code, and reasoning tasks. (https://ollama.com/library/deepseek-r1).",
+    "deepseek-r1:14b": "DeepSeek’s first-generation reasoning models, achieving performance comparable to OpenAI-o1 across math, code, and reasoning tasks. (https://ollama.com/library/deepseek-r1).",
+    "deepseek-r1:70b": "DeepSeek’s first-generation reasoning models, achieving performance comparable to OpenAI-o1 across math, code, and reasoning tasks. (https://ollama.com/library/deepseek-r1).",
     "qwen:0.5b": "A compact text model with only 0.5 billion parameters, suitable for tasks on resource-constrained environments (https://ollama.com/library/qwen).",
     "llava:7b": "Combines a vision encoder and Vicuna for general-purpose visual and language understanding (https://ollama.com/library/llava).",
     "llava:13b": "Combines a vision encoder and Vicuna for general-purpose visual and language understanding (https://ollama.com/library/llava).",
@@ -327,7 +330,6 @@ def ram_based_models(total_ram):
     "codellama:13b": "Code generation model, boasting 13 billion parameters built on top of Llama 2 from Meta (https://ollama.com/library/codellama).",
     "codellama:34b": "Powerful code generation model, boasting 34 billion parameters built on top of Llama 2 from Meta (https://ollama.com/library/codellama)",
     "codellama:70b": "Very powerful code generation model, boasting 70 billion parameters built on top of Llama 2 from Meta (https://ollama.com/library/codellama).",
-    "cas/discolm-mfto-german": "Experimental merge of pre-trained language models (https://ollama.com/cas/discolm-mfto-german).",
     }
 
        
@@ -338,11 +340,11 @@ def ram_based_models(total_ram):
         recommended_models = ["gemma:2b"]#, "wizard-math","llama-pro:latest"]  
     
     if total_ram >= 7.9:
-        recommended_models.extend(["llama3:8b","gemma:7b","mistral:latest","cas/discolm-mfto-german","sauerkrautlm-7b-hero","llama2:latest","codellama:latest"])#, "wizard-math","llama-pro:latest"]  
+        recommended_models.extend(["llama3.1:8b","gemma:7b","mistral:latest","deepseek-r1:8b","sauerkrautlm-7b-hero","codellama:latest"])#, "wizard-math","llama-pro:latest"]  
     if total_ram >= 15.9:
-        recommended_models.extend(["llama2:13b", "codellama:13b"])  
+        recommended_models.extend(["deepseek-r1:14b","llama2:13b", "codellama:13b"])  
     if total_ram >= 60:
-        recommended_models.extend(["llama:70b","codellama:34b", "codellama:70b" ])  # Larger models for 64GB+ RAM
+        recommended_models.extend(["llama3.3:70b","llama3.1:70b","deepseek-r1:70b","codellama:34b", "codellama:70b" ])  # Larger models for 64GB+ RAM
 
     return recommended_models,models_dictionary 
  
@@ -896,4 +898,55 @@ def typewriter(text: str, speed: int):
         container.markdown(markdown_text, unsafe_allow_html=True)
         time.sleep(1 / speed)
 
-        
+#--------------------------------------------------------------------------------------------------
+# Ollama image chat function
+def llm_stream_image(model_name, messages): 
+    '''
+    #Messages general form for the Ollama call:
+    messages=[{'role': 'user', 
+               'content': 'describe this image',
+               "images": [encoded_image],
+               "options": { "seed": 42,
+                            "temperature": 0.8 }}
+                ]
+    '''
+    response = ollama.chat(model_name, messages, stream=True)
+
+    for chunk in response:
+        yield chunk['message']['content']
+
+
+
+
+
+
+# image processing /https://blog.cowtipping.co.uk/posts/how-to-read-images-with-ai-ollama/
+def image_to_base64(image_file):
+    image_data = image_file.read()
+    encoded_string = base64.b64encode(image_data).decode("utf-8")
+    return encoded_string
+
+def convert_to_rgb(image):
+    if image.mode in ("RGBA", "P"):
+        return image.convert("RGB")
+    return image
+
+def convert_to_jpeg(image, quality=100):
+    byte_arr = io.BytesIO()
+    image.save(byte_arr, format="JPEG", quality=quality)
+    return byte_arr.getvalue()
+
+def is_jpeg(file):
+    return file.type.lower() in ["jpg", "jpeg"]
+
+def process_image(uploaded_file):
+    uploaded_file.seek(0)
+    image = Image.open(uploaded_file)
+
+    if not is_jpeg(uploaded_file):
+        image = convert_to_rgb(image)
+        encoded_image = base64.b64encode(convert_to_jpeg(image)).decode("utf-8")
+    else:
+        encoded_image = base64.b64encode(uploaded_file.read()).decode("utf-8")
+
+    return image, encoded_image        

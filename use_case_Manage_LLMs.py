@@ -14,9 +14,8 @@ def app():
     #---------------------
     
     st.write("STATY.AI offers a user-friendly interface for downloading and running open access Large Language Models (LLMs) locally on your PC.")    
-    #st.markdown("Managing LLMs is done using Ollama (https://ollama.com).") 
     st.markdown("Managing LLMs is done using <a href='https://ollama.com' style='color:#38bcf0'>Ollama</a>.", unsafe_allow_html=True) 
-
+    
     st.markdown("---") 
 
     #----------------------------------------------------------------------------------
