@@ -30,8 +30,9 @@ def app():
     if available_ollama_models is None:
         model_names=[]    
     else:
-        model_names = [model["name"] for model in available_ollama_models]
-    
+        #model_names = [model["name"] for model in available_ollama_models]
+        model_names = [m.model for m in available_ollama_models]
+
     # Find model proposals       
     (model_proposals,models_dictionary)=lfc.ram_based_models(total_ram)    
     if "sroecker/sauerkrautlm-7b-hero:latest" in model_names:
@@ -102,8 +103,8 @@ def app():
             with a5:   
                 
                 # llm details object
-                llm_details = [model for model in available_ollama_models if model["name"] == remove_model][0]
-                
+                #llm_details = [model for model in available_ollama_models if model["name"] == remove_model][0]
+                llm_details = [m for m in available_ollama_models if m.model == remove_model][0]
                 # convert size in llm_details from bytes to GB (human-friendly display)
                 if type(llm_details["size"]) != str:
                     llm_details["size"] = f"{round(llm_details['size'] / 1e9, 2)} GB"

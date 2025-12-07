@@ -29,7 +29,7 @@ def app():
     if 'persist_directory' not in st.session_state:
         st.session_state['persist_directory']=os.path.join('knowledge_bases','knowledge_base' )      
     if 'source_directory' not in st.session_state:    
-        st.session_state['source_directory']='temp_data'
+        st.session_state['source_directory']='temp_data'#st.session_state['source_directory']=os.path.join('knowledge_bases', 'file_dir')  
     if 'embeddings_model_name'not in st.session_state:
         st.session_state['embeddings_model_name']='all-MiniLM-L6-v2'
     if 'chunk_size' not in st.session_state:
@@ -53,7 +53,12 @@ def app():
     if 'experimental_splitting_done' not in st.session_state:
         st.session_state['experimental_splitting_done']=False   
     if 'text' not in st.session_state:
-        st.session_state['text']=None      
+        st.session_state['text']=None  
+    if 'return_chunks' not in st.session_state:      
+        st.session_state['return_chunks']=True
+    if 'return_pdfs' not in st.session_state:
+        st.session_state['return_pdfs']=False
+
     st.session_state['start_chatting']=False
     
     
@@ -62,7 +67,6 @@ def app():
         st.session_state['experimental_splitting_done']=False
         st.session_state['text'] =None
 
-    #st.write(st.session_state['persist_directory'])
     # model paramater settings sidebar       
     if llm_name:
         
@@ -94,7 +98,8 @@ def app():
             upload_container=st.container(border=True)
             upload_container.markdown("**Upload your data**")
             uploaded_data = upload_container.file_uploader("File upload", 
-                                    type=[".docx",".pdf", "txt" , "csv",".html"],accept_multiple_files=True,on_change=change_check_splitting_state)
+                                    type=[".pdf"],accept_multiple_files=True,on_change=change_check_splitting_state)
+                                    #type=[".docx",".pdf", "txt" , "csv",".html"],accept_multiple_files=True,on_change=change_check_splitting_state)
     
             #delete temp_dir if exists!
             temp_dir = os.path.join(os.getcwd(), "temp_data")  
@@ -103,24 +108,38 @@ def app():
 
             
             if uploaded_data:  
-                # save files temporarily to 'temp_dir' and delete it afterwards                                   
-                temp_dir = os.path.join(os.getcwd(), "temp_data")  
-                if not os.path.exists(temp_dir):
-                    os.makedirs(temp_dir)
-                for file_obj in uploaded_data:
-                    file_path = os.path.join(temp_dir, file_obj.name)
-                    with open(file_path, 'wb') as f:
-                        f.write(file_obj.read())
+                # save files to 'file_dir'                                  
+                file_dir = os.path.join(os.getcwd(),'knowledge_bases', 'file_dir')                 
+                if not os.path.exists(file_dir):
+                    os.makedirs(file_dir)
                 
+                temp_dir = os.path.join(os.getcwd(), "temp_data") 
+                if not os.path.exists(temp_dir):                    
+                    os.makedirs(temp_dir)
+
+                for file_obj in uploaded_data:
+                    file_data = file_obj.read()
+
+                    # Save to 'file_dir'
+                    file_path_file_dir = os.path.join(file_dir, file_obj.name)
+                    with open(file_path_file_dir, 'wb') as f:
+                        f.write(file_data)
+
+                    # Save to 'temp_data'
+                    file_path_temp_dir = os.path.join(temp_dir, file_obj.name)
+                    with open(file_path_temp_dir, 'wb') as frsc:
+                        frsc.write(file_data)
+                    
                 #---------------------------------------------------------------------------------------
                 #Knowledge base settings expander
                 #---------------------------------------------------------------------------------------
                 with st.expander("Knowledge base settings",expanded=False):             
                     knowledge_base_directory=st.toggle("Use default folder ('knowledge_base') for RAG?",
                                                        value=False,
-                                                       help="If you select no, then a 'knowledge base' will be located in a new folder having the same name as your file",
+                                                       help="If you select no, then a 'knowledge base' will be located in a new folder having the same name as your file or you can specify the knowledge base name",
                                                        on_change=change_check_splitting_state)
-                   
+                    if knowledge_base_directory==False:
+                        knowledge_base_folder_name=st.text_input("Knowledge base name",placeholder="Enter here knowledge base name")
                     kb_container = st.container(border=True)
                     kb_container.markdown('**Separator base settings**')
                     
@@ -209,10 +228,12 @@ def app():
                             eb_container.markdown(f"You selected embedding model  '{embeddings_model_name}' for the default knowldege base!  \n\n See model details at https://www.sbert.net/docs/pretrained_models.html")
                             st.session_state['embeddings_model_name']= embeddings_model_name
                         else:
-                            embeddings_model_name = eb_container.selectbox("Select embedings model",['all-MiniLM-L6-v2','multi-qa-MiniLM-L6-cos-v1','all-MiniLM-L12-v2','distiluse-base-multilingual-cased-v1','paraphrase-multilingual-MiniLM-L12-v2'],help='See https://www.sbert.net/docs/pretrained_models.html for more info')
+                            embeddings_model_name = eb_container.selectbox("Select embedings model",['all-MiniLM-L6-v2','multi-qa-MiniLM-L6-cos-v1','all-MiniLM-L12-v2','distiluse-base-multilingual-cased-v1','paraphrase-multilingual-MiniLM-L12-v2', 'enter model name'],help='See https://www.sbert.net/docs/pretrained_models.html for more info. In general, you can either enter a filepath or a model name:  if it is a filepath on disc, it loads the model from that path. If it is not a path, it first tries to download a pre-trained SentenceTransformer model. ')
+                            if embeddings_model_name=='enter model name':embeddings_model_name=st.text_input("Enter model name:",placeholder="BAAI/bge-m3")          
                             st.session_state['embeddings_model_name']= embeddings_model_name
                     else:
-                        embeddings_model_name = eb_container.selectbox("Select embedings model",['all-MiniLM-L6-v2','multi-qa-MiniLM-L6-cos-v1','all-MiniLM-L12-v2','distiluse-base-multilingual-cased-v1','paraphrase-multilingual-MiniLM-L12-v2'],help='See https://www.sbert.net/docs/pretrained_models.html for more info')
+                        embeddings_model_name = eb_container.selectbox("Select embedings model",['all-MiniLM-L6-v2','multi-qa-MiniLM-L6-cos-v1','all-MiniLM-L12-v2','distiluse-base-multilingual-cased-v1','paraphrase-multilingual-MiniLM-L12-v2','enter model name'],help='See https://www.sbert.net/docs/pretrained_models.html for more info. In general, you can either enter a filepath or a model name:  if it is a filepath on disc, it loads the model from that path. If it is not a path, it first tries to download a pre-trained SentenceTransformer model.')
+                        if embeddings_model_name=='enter model name':embeddings_model_name=st.text_input("Enter model name:",placeholder="BAAI/bge-m3")          
                         st.session_state['embeddings_model_name']= embeddings_model_name
                             
                     
@@ -220,8 +241,10 @@ def app():
                     if knowledge_base_directory==True:
                         st.session_state['persist_directory'] = os.path.join('knowledge_bases','knowledge_base')   
                     else:
-                        first_file_info=uploaded_data[0]                                              
-                        knowledge_base_name =  os.path.join('knowledge_bases',re.sub(r'\s+', '_', first_file_info.name.split('.')[0]))
+                        first_file_info=uploaded_data[0]                         
+                        if len(knowledge_base_folder_name)==0:knowledge_base_folder_name=first_file_info.name.split('.')[0]   
+                                                        
+                        knowledge_base_name =  os.path.join('knowledge_bases',re.sub(r'\s+', '_', knowledge_base_folder_name))
                         #set the knowledge_base directory to the file name withouth empty spaces!
                         st.session_state['persist_directory']=knowledge_base_name
                 
@@ -248,7 +271,7 @@ def app():
         
         if data_chat:        
             
-             #delete temp_dir if not already deleted!
+            #delete temp_dir if not already deleted!
             temp_dir = os.path.join(os.getcwd(), "temp_data")  
             if os.path.exists(temp_dir):
                 shutil.rmtree(temp_dir) 
@@ -260,7 +283,7 @@ def app():
             persist_directory = st.session_state['persist_directory']
             return_source_documents=st.session_state['return_source_documents']
             embeddings_model_name = lfc.read_embedding_model_name(persist_directory)   
-                           
+                      
                       
             prompt = st.chat_input(f"Ask '{llm_name}' a question ...")
 

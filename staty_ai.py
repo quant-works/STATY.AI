@@ -5,6 +5,7 @@ import use_case_Manage_LLMs
 import use_case_basic_chat
 import use_case_data_chat
 import use_case_image
+import use_case_classification
 import use_case_FAQs
 
 #----------------------------------------------------------------------------------------------
@@ -93,11 +94,12 @@ PAGES = {
     "Manage LLMs":use_case_Manage_LLMs,
     "Chat": use_case_basic_chat,
     "Chat with my data": use_case_data_chat,
+    "Docs classification": use_case_classification,
     "Read my image": use_case_image,
     "FAQs": use_case_FAQs,
     }
 #st.sidebar.subheader("Navigation")
-main_navigation = st.sidebar.radio("Navigation", ["Home", "Manage LLMs","Chat", "Chat with my data","Read my image", "FAQs"])
+main_navigation = st.sidebar.radio("Navigation", ["Home", "Manage LLMs","Chat", "Chat with my data","Docs classification","Read my image", "FAQs"])
 st.sidebar.markdown("")
 
 if main_navigation=="Home":
@@ -108,6 +110,8 @@ elif main_navigation =="Chat":
     use_case="Chat"
 elif main_navigation=="Chat with my data":
     use_case="Chat with my data"
+elif main_navigation=="Docs classification":
+    use_case= "Docs classification"  
 elif main_navigation=="Read my image":
     use_case="Read my image"
 elif main_navigation=="FAQs":

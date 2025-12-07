@@ -30,7 +30,10 @@ from langchain.text_splitter import RecursiveCharacterTextSplitter, CharacterTex
 from langchain_community.vectorstores import Chroma
 from langchain_community.embeddings import HuggingFaceEmbeddings
 import nltk
+import fitz
+
 print(nltk.data.path)
+
 
 
 ai_avatar='default_data/logo.png'
@@ -87,9 +90,8 @@ def select_model_sidebar():
     if available_ollama_models is None:
         model_names=[]    
     else:
-        model_names = [model["name"] for model in available_ollama_models]
-      
-    
+        #model_names = [model["name"] for model in available_ollama_models]       
+        model_names = [m.model for m in available_ollama_models]
     
     # User selection of the LLM
     llm_name = st.sidebar.selectbox("Choose model", [""] + model_names)
@@ -159,13 +161,14 @@ def staty_ai_info():
 
 
 #-----------------------------------------------------------------------------------------------------------
-
 # model details settings expander
 def model_settings(available_ollama_models,llm_name):
    
     # llm details object
-    llm_details = [model for model in available_ollama_models if model["name"] == llm_name][0]
-        
+    #llm_details = [model for model in available_ollama_models if model["name"] == llm_name][0]
+    
+    llm_details = [m for m in available_ollama_models if m.model == llm_name][0]  
+
     # convert size in llm_details from bytes to GB (human-friendly display)
     if type(llm_details["size"]) != str:
         llm_details["size"] = f"{round(llm_details['size'] / 1e9, 2)} GB"
@@ -216,13 +219,16 @@ def ollama_check():
 
     try:
         available_ollama_models = ollama.list()["models"]
+        
+       
     except Exception as e:
         st.error("Please make sure you have Ollama installed and running!  You can download Ollama from https://ollama.com.  \n Please reload this page after starting Ollama.   ")
         st.stop()
 
     if available_ollama_models is None:
         st.error("**You don't have any models yet.** Install some suitable for your RAM.")
-               
+       
+   
     return available_ollama_models  
 
 
@@ -614,7 +620,7 @@ def file_selector():
     
     filenames = os.listdir(folder_path)
     folder_names = [filename for filename in filenames 
-                    if os.path.isdir(os.path.join(folder_path, filename)) and filename not in [ ".venv", ".streamlit","default_data","temp_data","__pycache__"]]
+                    if os.path.isdir(os.path.join(folder_path, filename)) and filename not in [ ".venv", ".streamlit","default_data","file_dir","__pycache__"]]
     selected_filename = st.selectbox('Select a folder', 
                                      folder_names,
                                      help="Select a folder with your knowledge base",
@@ -718,7 +724,9 @@ def chat_after_embedding():
 #-----------------------------------------------------------------------------------------------------------
 #check if a file already exists in a default knowledge base 'knowledge_base'
 def check_for_duplicates(persist_directory,embeddings_model_name):
-    embeddings = HuggingFaceEmbeddings(model_name=embeddings_model_name)
+    embeddings = HuggingFaceEmbeddings(model_name=embeddings_model_name
+                                       #, model_kwargs={'device': 'cuda'}
+                                       )
     db = Chroma(persist_directory=persist_directory, embedding_function=embeddings) 
 
     # get metadata from Chroma    
@@ -729,8 +737,8 @@ def check_for_duplicates(persist_directory,embeddings_model_name):
     unique_sources = set(sources)
     dict_filenames = [os.path.basename(key) for key in unique_sources]
         
-    # check the content of the temp directory
-    temp_dir = os.path.join(os.getcwd(), "temp_data") 
+    # check the content of the temp_dir directory
+    temp_dir = os.path.join(os.getcwd(), "temp_dir") 
     temp_dir_content=os.listdir(temp_dir)
     
     common_elements = [element for element in dict_filenames if element in [item for item in temp_dir_content]]
@@ -747,7 +755,9 @@ def create_embeddings(embedings_placeholder,embeddings_model_name,temp_dir):
     embedings_info=embedings_placeholder
     
     # Create embeddings
-    embeddings = HuggingFaceEmbeddings(model_name=embeddings_model_name)
+    embeddings = HuggingFaceEmbeddings(model_name=embeddings_model_name
+                                       #, model_kwargs={'device': 'cuda'}
+                                       )
     persist_directory=st.session_state['persist_directory']
     
     # Update knowledge base at 'knowledge_bases/knowledge_base':
@@ -818,7 +828,7 @@ def retriever_settings_sidebar():
     with retriever_settings:
         target_source_chunks=st.number_input('Specify number of relevant chunks to return'
                                              ,min_value=2,
-                                             max_value=6,
+                                             max_value=10,
                                              value=4, 
                                              step=1,
                                              help="This parameter controls the number of chunks (pieces of text) from the target source that will be used in the creating the response during the RAG retrieval process.")
@@ -827,8 +837,14 @@ def retriever_settings_sidebar():
                                           value=False,
                                           help="Argument on whether or not to return metadata in the responses"
                                           )
-        st.session_state['return_source_documents']=return_source_documents
+        if return_source_documents:
+            return_chunks=st.checkbox("Return chunks",value=True)
+            return_pdfs=st.checkbox("Return highlighted pdfs",value=False)
+            st.session_state['return_chunks']=return_chunks
+            st.session_state['return_pdfs']=return_pdfs
 
+        st.session_state['return_source_documents']=return_source_documents
+        
 
 
 
@@ -843,49 +859,8 @@ def get_chat_name_placeholder(text):
     return longest_word
 
 
-#--------------------------------------------------------------------------------------------------
-#RAG retriever
-def handle_data_chat(prompt, model, model_temp,system_promt,persist_directory,embeddings_model_name,target_source_chunks,return_source_documents):            
-       
-    # Build prompt    
-    template = """Use the following pieces of context to answer the question at the end. If you don't know the answer, just say that you don't know, don't try to make up an answer. Keep the answer as concise as possible.  
-    {context}
-    Question: {question}
-    Helpful Answer:"""
-    QA_CHAIN_PROMPT = PromptTemplate.from_template(template)
-       
-    embeddings = HuggingFaceEmbeddings(model_name=embeddings_model_name)
-    llm=Ollama(model=model,temperature=model_temp)
-    
-    db = Chroma(persist_directory=persist_directory, embedding_function=embeddings)     
-    
-    qa = RetrievalQA.from_chain_type(
-        llm,
-        retriever=db.as_retriever(search_kwargs={"k": target_source_chunks}),
-        return_source_documents=return_source_documents,
-        chain_type_kwargs={"prompt": QA_CHAIN_PROMPT}
-    )
-    
-    #get the response from LLM
-    result=qa({"query": prompt + ' ' + system_promt})
-    answer = result["result"]   
-    
-   
-    # stream response    
-    for chunk in answer:
-        yield chunk#['message']['content']
-   
 
-    #response source
-    if return_source_documents:    
-        #source_metadata = [doc.metadata["source"] for doc in result["source_documents"]]        
-        #st.warning(f"Source for the {target_source_chunks} chunks used in creating the respone: {source_metadata}")   
-        st.warning("Source for the  chunks used in creating the respone:")
-        st.write(result["source_documents"])   
-    return 
-
-import time
-
+#-----------------------------------------------------------------------------------------------------
 # typewriter effect for the home page
 def typewriter(text: str, speed: int):    
 
@@ -919,8 +894,7 @@ def llm_stream_image(model_name, messages):
 
 
 
-
-
+#-----------------------------------------------------------------------------------------------------
 # image processing /https://blog.cowtipping.co.uk/posts/how-to-read-images-with-ai-ollama/
 def image_to_base64(image_file):
     image_data = image_file.read()
@@ -950,4 +924,220 @@ def process_image(uploaded_file):
     else:
         encoded_image = base64.b64encode(uploaded_file.read()).decode("utf-8")
 
-    return image, encoded_image        
+    return image, encoded_image    
+
+
+#--------------------------------------------------------------------------------------------------
+#RAG retriever
+def handle_data_chat(prompt, model, model_temp,system_promt,persist_directory,embeddings_model_name,target_source_chunks,return_source_documents):            
+       
+    # Build prompt    
+    template = """Use the following pieces of context to answer the question at the end. If you don't know the answer, just say that you don't know, don't try to make up an answer. Keep the answer as concise as possible.  
+    {context}
+    Question: {question}
+    Helpful Answer:"""
+    QA_CHAIN_PROMPT = PromptTemplate.from_template(template)
+       
+    embeddings = HuggingFaceEmbeddings(model_name=embeddings_model_name
+                                       #, model_kwargs={'device': 'cuda'}
+                                       )
+    llm=Ollama(model=model,temperature=model_temp)
+    
+    db = Chroma(persist_directory=persist_directory, embedding_function=embeddings)     
+    
+    qa = RetrievalQA.from_chain_type(
+        llm,
+        retriever=db.as_retriever(search_kwargs={"k": target_source_chunks}),
+        return_source_documents=return_source_documents,
+        chain_type_kwargs={"prompt": QA_CHAIN_PROMPT}
+    )
+    
+    #get the response from LLM
+    result=qa({"query": prompt + ' ' + system_promt})
+    answer = result["result"]   
+    
+   
+    # stream response    
+    for chunk in answer:
+        yield chunk#['message']['content']   
+
+    #Response source
+    if return_source_documents:  
+        st.markdown(" ")
+        st.warning("Source for the  chunks used in creating the respone:")        
+        
+        #source_metadata = [doc.metadata["source"] for doc in result["source_documents"]]        
+        #st.warning(f"Source for the {target_source_chunks} chunks used in creating the respone: {source_metadata}")   
+                
+        #st.write(result["source_documents"])   
+        documents = result["source_documents"]      
+   
+        # Read pdfs (!) and display the chunks used for creating the solution
+        process_documents_and_display(documents)
+    return 
+
+###########################################################
+def clean_highlighted_pdfs():
+
+    folder_path = os.path.join(os.getcwd(), 'knowledge_bases', 'file_dir')  
+
+    # Check if the folder exists
+    if os.path.exists(folder_path):
+        # Loop through all files in the folder
+        for filename in os.listdir(folder_path):
+            # Check if the file name contains "_highlighted_"
+            if "_highlighted_" in filename:
+                # Get the full path of the file
+                file_path = os.path.join(folder_path, filename)
+                try:
+                    # Delete the file
+                    os.remove(file_path)                    
+                except Exception as e:
+                    print(f"Error deleting {filename}: {e}")
+    
+    return()    
+
+# Function to generate bigrams from text
+def generate_bigrams(text):
+    words = text.split()
+    return [(words[i], words[i+1]) for i in range(len(words)-1)]
+
+# Function to find matching bigrams between page text and chunk
+def find_matching_bigrams(page_text, chunk):
+    page_bigrams = set(generate_bigrams(page_text))
+    chunk_bigrams = set(generate_bigrams(chunk))
+
+    # Find the intersection of both bigrams
+    common_bigrams = page_bigrams.intersection(chunk_bigrams)
+   
+    return common_bigrams
+
+# Function to extract text from a specific page in the PDF
+def extract_text_from_page(pdf_path, page_number):
+    doc = fitz.open(pdf_path)
+    page = doc.load_page(page_number - 1)  # PyMuPDF is zero-indexed
+    return page.get_text()
+
+# Function to highlight text between first and last common bigram
+def highlight_text_between_bigrams(pdf_path, page_text, chunk, page_number,no_counter):
+    
+    common_bigrams = find_matching_bigrams(page_text, chunk)
+    if not common_bigrams:
+        return pdf_path  # No common bigrams, return original path
+
+    # Extract the first and last common bigram's position
+    page_bigrams =generate_bigrams(page_text)
+    
+    # Track the positions of the common bigrams
+    common_bigrams_positions = []
+
+    # Iterate through page_bigrams and find positions of common bigrams
+    for idx, bigram in enumerate(page_bigrams):
+        if bigram in common_bigrams:
+            common_bigrams_positions.append(idx)
+
+    # If there are common bigrams, find the first and last position
+    if common_bigrams_positions:
+        start_idx = common_bigrams_positions[0]
+        end_idx = common_bigrams_positions[-1]
+    else:
+        start_idx = end_idx = -1  # No matches found
+
+    if start_idx==-1 and end_idx == -1:
+        output_pdf_path=None
+
+    else:
+        # Find the indices of the first and last matching bigrams
+        first_bigrams = sorted(common_bigrams, key=lambda x: page_bigrams.index(x))[0]
+        last_bigrams = sorted(common_bigrams, key=lambda x: page_bigrams.index(x))[-1]
+
+        # Locate the text between the first and last matching bigram
+        first_index = page_text.find(" ".join(first_bigrams))
+        last_index = page_text.find(" ".join(last_bigrams))
+
+        # Extract the portion of the page text to highlight    
+        #text_to_highlight =  page_text[first_index:last_index + len(" ".join(last_bigrams))]
+        words = page_text.split()
+        text_to_highlight = " ".join(words[start_idx:end_idx+2])
+        
+        
+        # Open the PDF and highlight the text
+        doc = fitz.open(pdf_path)  # Open the PDF
+        page = doc.load_page(page_number)  # Load the correct page
+
+
+        # Search and highlight the text in the page
+        text_instances = page.search_for(text_to_highlight)
+        
+        if len(text_instances)>0:
+            for inst in text_instances:
+                page.add_highlight_annot(inst)
+
+            # Save the modified PDF to a new file
+            output_pdf_path = pdf_path.replace('.pdf', f"_highlighted_{no_counter}.pdf")
+            doc.save(output_pdf_path)
+        else:
+            output_pdf_path=None    
+    return output_pdf_path
+
+# Function to display the PDF with highlights
+def display_pdf_with_highlights(pdf_path,page_number):
+    with open(pdf_path, "rb") as file:
+        file_data = file.read()
+
+    # Encode the binary data into base64
+    base64_pdf = base64.b64encode(file_data).decode('utf-8')
+    '''
+    pdf_display = (
+        f'<iframe src="data:application/pdf;base64,{base64_pdf}" '
+        'width="800" height="1000" type="application/pdf"></iframe>'
+    )
+    '''
+    target_page =page_number+1
+    pdf_display = f'''
+    <iframe src="data:application/pdf;base64,{base64_pdf}#page={page_number+1}" 
+            width="800" height="1000" type="application/pdf"></iframe>
+    '''
+    st.markdown(pdf_display, unsafe_allow_html=True)
+
+# Function to process documents and display highlighted PDFs
+def process_documents_and_display(documents):
+    no_counter=0
+    for doc in documents:
+        no_counter+= 1        
+        
+        filename = os.path.basename(doc.metadata['source'])
+
+        # Define the new base directory
+        file_path = os.path.join(os.getcwd(), "knowledge_bases", "file_dir",filename)
+        
+        # Write down the source document location
+        
+        st.markdown("")
+        st.markdown(f"**Document {no_counter}**: {file_path}")
+        return_chunks=st.session_state['return_chunks']
+        return_pdfs=st.session_state['return_pdfs']
+        if return_chunks:
+            st.markdown(f'<div style="background-color: #f0f0f0; padding: 10px; border-radius: 5px;">{doc.page_content}</div>', unsafe_allow_html=True)
+            st.markdown("")
+            #st.code(doc.page_content)  
+        if return_pdfs:
+            # Extract the page text
+            page_text = extract_text_from_page(file_path, doc.metadata['page']+1)
+            page_content = doc.page_content  # Full text chunk (from LLM)
+            page_number = doc.metadata['page']  # The page number where the text appears
+
+            
+            # Highlight the text in the PDF
+            highlighted_pdf_path = highlight_text_between_bigrams(file_path, page_text, page_content, page_number,no_counter)
+
+            if highlighted_pdf_path !=None:
+            
+                # Display the highlighted PDF in Streamlit
+                display_pdf_with_highlights(highlighted_pdf_path,page_number)
+            else:
+                st.warning("It looks like there wasn't enough text to highlight, but here is the page where you can look for some info. ")
+                display_pdf_with_highlights(file_path,page_number)
+    
+    # Delete old highlighted files if any
+    clean_highlighted_pdfs()             
